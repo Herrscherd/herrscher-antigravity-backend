@@ -195,3 +195,18 @@ func TestOverlongLineStopsTheRead(t *testing.T) {
 		t.Fatalf("err = %v, want a line too long error", err)
 	}
 }
+
+func TestTurnUsageAddsCacheReadsOfEveryStep(t *testing.T) {
+	stream := `{"event":"step_update","step_update":{"step_index":1,"state":"DONE","step_type":"agent_response","usage":{"input_tokens":100,"output_tokens":10,"cache_read_tokens":1000}}}
+{"event":"step_update","step_update":{"step_index":3,"state":"DONE","step_type":"agent_response","text_delta":"ok","usage":{"input_tokens":20,"output_tokens":5,"cache_read_tokens":3000}}}
+{"event":"result","result":{"conversation_id":"c","status":"SUCCESS","response":"ok"}}
+`
+	_, events, err := replay(t, stream, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := eventsOfKind(events, "result")
+	if len(results) != 1 || results[0].InTokens != 120 || results[0].OutTokens != 15 || results[0].CacheRead != 4000 {
+		t.Fatalf("result = %+v, want 120 in, 15 out and 4000 cache read", results)
+	}
+}

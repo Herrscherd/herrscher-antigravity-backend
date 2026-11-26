@@ -161,10 +161,10 @@ func TestTurnReturnsSoonAfterTheResultWhenAgyLingers(t *testing.T) {
 	stub := writeStubScript(t, `cat > /dev/null
 printf '{"event":"result","result":{"conversation_id":"conv-1","status":"ERROR","error":"503 no capacity"}}\n'
 exec sleep 600`)
-	backend := NewBackend(t.Context(), Config{Cmd: stub})
+	backend := withShortExitGrace(t, NewBackend(t.Context(), Config{Cmd: stub}))
 	started := time.Now()
 	_, err := backend.Respond(t.Context(), contracts.Prompt{Content: "hi"}, nil)
-	if elapsed := time.Since(started); elapsed > resultExitGrace+5*time.Second {
+	if elapsed := time.Since(started); elapsed > shortExitGrace+5*time.Second {
 		t.Fatalf("Respond took %v, want it bounded by the exit grace after the result", elapsed)
 	}
 	failed, isFailed := errors.AsType[*TurnFailedError](err)
@@ -178,9 +178,21 @@ func TestLingeringSuccessfulTurnIsNotAFailure(t *testing.T) {
 	stub := writeStubScript(t, `cat > /dev/null
 printf '{"event":"result","result":{"conversation_id":"conv-1","status":"SUCCESS","response":"ok"}}\n'
 exec sleep 600`)
-	backend := NewBackend(t.Context(), Config{Cmd: stub})
+	backend := withShortExitGrace(t, NewBackend(t.Context(), Config{Cmd: stub}))
 	text, err := backend.Respond(t.Context(), contracts.Prompt{Content: "hi"}, nil)
 	if err != nil || text != "ok" {
 		t.Fatalf("text = %q, err = %v, want the answer and no error", text, err)
 	}
+}
+
+const shortExitGrace = 300 * time.Millisecond
+
+func withShortExitGrace(t *testing.T, backend contracts.Backend) contracts.Backend {
+	t.Helper()
+	agy, ok := backend.(*responder)
+	if !ok {
+		t.Fatalf("backend is %T, want *responder", backend)
+	}
+	agy.exitGrace = shortExitGrace
+	return agy
 }

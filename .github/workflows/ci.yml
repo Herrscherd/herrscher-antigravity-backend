@@ -28,5 +28,5 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Stream, output grace and prompt writer on Windows
-        run: go test -race -run 'ReadOutputGrace|WritePrompt|TestDiscoverStopsWhenDeadlinePasses|TestDiscoverGatewayOnlyNeverRunsTheCLI|TestDiscoverMissingBinaryIsAnError|TestKillAfterTreeFailureLogsAndKillsProcess|TestRecorded|TestStream|TestOverlong|TestResume|TestErrorResult|TestCommandWith|TestRepeated|TestModelLines|TestDuplicateModel|TestStaticCatalog|TestFactory|TestEmptyPrompt' .
+      - name: Tests that need no shell, on Windows
+        run: go test -race ./...

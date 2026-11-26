@@ -46,6 +46,7 @@ func NewBackend(_ context.Context, config Config) contracts.Backend {
 		dir:          config.Dir,
 		stderr:       diagnosticsOutput(config),
 		conversation: config.ResumeID,
+		exitGrace:    resultExitGrace,
 	}
 }
 
@@ -65,6 +66,7 @@ type responder struct {
 	turns        sync.Mutex
 	mu           sync.Mutex
 	conversation string
+	exitGrace    time.Duration
 }
 
 var _ contracts.ResumeAware = (*responder)(nil)
@@ -86,7 +88,7 @@ func (r *responder) Respond(ctx context.Context, prompt contracts.Prompt, onEven
 	turn, readErr := readOutput(proc, stop, func(out io.Reader) (turnResult, error) {
 		return readTurn(bufio.NewReader(out), resumed, onEvent)
 	})
-	isCutAfterResult := readErr == nil && !proc.exitsWithin(resultExitGrace, stop)
+	isCutAfterResult := readErr == nil && !proc.exitsWithin(r.exitGrace, stop)
 	drainErr := drainOutput(proc, stop)
 	waitErr := errors.Join(exitError(proc.wait(), isCutAfterResult), proc.closeStdout())
 	r.setConversation(turn.Conversation)

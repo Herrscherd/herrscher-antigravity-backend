@@ -109,7 +109,10 @@ Each turn child starts in its own process group on Unix. The group is killed as
 soon as the direct child exits or the turn stops early, so a background process
 left by a tool dies with the turn. A descendant that escaped the group and still
 holds stdout gets one second before the read is cut. Outside Unix the child and
-its descendants are killed as a tree with `taskkill /T /F`.
+its descendants are killed as a tree with `taskkill /T /F` only when the turn is
+cut early (a cancelled context, a read error or the grace after the result).
+After a turn that ends normally nothing is killed outside Unix, so a background
+process started by a tool keeps running.
 
 ## Models and health
 
