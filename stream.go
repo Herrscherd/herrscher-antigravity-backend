@@ -122,13 +122,15 @@ func (e eventEmitter) emit(event contracts.BackendEvent) {
 }
 
 type turnUsage struct {
-	output int
-	last   wireUsage
+	input     int
+	output    int
+	cacheRead int
 }
 
 func (u *turnUsage) add(usage wireUsage) {
+	u.input += max(usage.InputTokens, 0)
 	u.output += max(usage.OutputTokens, 0)
-	u.last = usage
+	u.cacheRead += max(usage.CacheReadTokens, 0)
 }
 
 func readTurn(reader *bufio.Reader, resumed string, onEvent func(contracts.BackendEvent)) (turnResult, error) {
@@ -271,8 +273,8 @@ func (s *turnState) finish(result wireResult) turnResult {
 		Kind:      "result",
 		IsError:   failed,
 		OutTokens: s.usage.output,
-		InTokens:  s.usage.last.InputTokens,
-		CacheRead: s.usage.last.CacheReadTokens,
+		InTokens:  s.usage.input,
+		CacheRead: s.usage.cacheRead,
 	})
 	return turn
 }

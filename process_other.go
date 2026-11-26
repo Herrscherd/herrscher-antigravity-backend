@@ -22,3 +22,7 @@ func killGroup(process *os.Process) error {
 	}
 	return killAfterTreeFailure(process, treeErr)
 }
+
+func killLeftovers(*os.Process) error {
+	return nil
+}

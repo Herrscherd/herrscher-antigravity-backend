@@ -188,7 +188,7 @@ linters:
       - path: ^backend_test\.go$
         linters: [gocritic]
         text: "unnamedResult"
-      - path: ^(backend|discover)\.go$
+      - path: ^backend\.go$
         linters: [gosec]
         text: "^G204:"
 

@@ -23,3 +23,7 @@ func killGroup(process *os.Process) error {
 	}
 	return nil
 }
+
+func killLeftovers(process *os.Process) error {
+	return killGroup(process)
+}

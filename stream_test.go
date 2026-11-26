@@ -72,7 +72,7 @@ func TestRecordedTurnReportsUsagePerStepAndTheTurnTotal(t *testing.T) {
 		t.Fatalf("usage = %+v", usage)
 	}
 	results := eventsOfKind(events, "result")
-	if len(results) != 1 || results[0].IsError || results[0].OutTokens != 242 || results[0].InTokens != 2340 || results[0].CacheRead != 9004 {
+	if len(results) != 1 || results[0].IsError || results[0].OutTokens != 242 || results[0].InTokens != 13393 || results[0].CacheRead != 9004 {
 		t.Fatalf("result = %+v", results)
 	}
 }
@@ -83,8 +83,8 @@ func TestResumedTurnCountsOnlyItsOwnUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	results := eventsOfKind(events, "result")
-	if len(results) != 1 || results[0].OutTokens != 65 {
-		t.Fatalf("result = %+v, want the 65 output tokens of this turn, not the conversation total", results)
+	if len(results) != 1 || results[0].OutTokens != 65 || results[0].InTokens != 2304 || results[0].CacheRead != 9295 {
+		t.Fatalf("result = %+v, want the usage of this turn, not the conversation total", results)
 	}
 	if notices := eventsOfKind(events, contracts.BackendKindNotice); len(notices) != 0 {
 		t.Fatalf("notices = %+v, want none for a conversation that was resumed", notices)

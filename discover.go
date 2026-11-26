@@ -3,6 +3,7 @@ package antigravity
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -15,6 +16,7 @@ import (
 const (
 	signInText       = "sign in"
 	authRequiredText = "authentication required"
+	authFailedText   = "authentication failed"
 	boundedWaitDelay = 2 * time.Second
 	boundedOutputMax = 256 << 10
 	envCmd           = "ANTIGRAVITY_CMD"
@@ -58,7 +60,7 @@ func discover(ctx context.Context, access contracts.DiscoveryAccess) ([]contract
 		return nil, nil
 	}
 	if runErr != nil {
-		return nil, fmt.Errorf("agy models: %w", runErr)
+		return nil, fmt.Errorf("agy models: %w", errors.Join(runErr, ctx.Err()))
 	}
 	if output.stdout.exceeded {
 		return nil, &OutputTooLargeError{Limit: boundedOutputMax}
@@ -81,7 +83,7 @@ func runBounded(ctx context.Context, argv []string, dir, stdin string) (*bounded
 }
 
 func (o *boundedOutput) isSignedOut() bool {
-	return o.mentions(signInText) || o.mentions(authRequiredText)
+	return o.mentions(signInText) || o.mentions(authRequiredText) || o.mentions(authFailedText)
 }
 
 func (o *boundedOutput) mentions(lowerText string) bool {

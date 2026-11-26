@@ -1,3 +1,5 @@
+//go:build unix
+
 package antigravity
 
 import (
@@ -63,6 +65,13 @@ func TestDeepProbeRunsAPlanTurn(t *testing.T) {
 func TestDeepProbeFailedTurnIsDown(t *testing.T) {
 	report := probeWith(t, signedInModels+"\n"+`cat > /dev/null; printf '{"event":"result","result":{"status":"ERROR","error":"boom"}}\n'; exit 1`, true)
 	if report.State != contracts.HealthDown {
+		t.Fatalf("report = %+v", report)
+	}
+}
+
+func TestDeepProbeRefusedSignInNamesTheLoginCommand(t *testing.T) {
+	report := probeWith(t, signedInModels+"\n"+`cat > /dev/null; printf '{"event":"result","result":{"status":"ERROR","error":"authentication failed or timed out"}}\n'; echo "error: authentication failed or timed out" >&2; exit 1`, true)
+	if report.State != contracts.HealthDown || report.Detail.Code != contracts.CodeHealthCredentialsRefused || report.Remedy.Code != contracts.CodeHealthRemedyRun {
 		t.Fatalf("report = %+v", report)
 	}
 }

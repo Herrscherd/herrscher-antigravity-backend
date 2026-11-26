@@ -36,7 +36,7 @@ type readOutcome[Result any] struct {
 	err   error
 }
 
-func startTurn(ctx context.Context, argv []string, dir, prompt string, stderr io.Writer, setDeadline stdoutDeadline) (*turnProcess, error) {
+func startTurn(ctx context.Context, argv []string, dir, prompt string, stderr io.Writer) (*turnProcess, error) {
 	stdinReader, stdinWriter, err := os.Pipe()
 	if err != nil {
 		return nil, err
@@ -57,7 +57,7 @@ func startTurn(ctx context.Context, argv []string, dir, prompt string, stderr io
 		cmd:         cmd,
 		stdin:       stdinWriter,
 		stdout:      stdoutReader,
-		setDeadline: setDeadline,
+		setDeadline: setReadDeadline,
 		prompted:    make(chan struct{}),
 		exited:      make(chan struct{}),
 	}
@@ -72,7 +72,7 @@ func startTurn(ctx context.Context, argv []string, dir, prompt string, stderr io
 func (proc *turnProcess) writePrompt(prompt string) {
 	defer close(proc.prompted)
 	_, err := io.Copy(proc.stdin, strings.NewReader(prompt))
-	closeQuietly(proc.stdin)
+	err = errors.Join(err, proc.closeStdin())
 	if err != nil && !isStdinGone(err) {
 		proc.promptErr = err
 	}
@@ -84,10 +84,10 @@ func isStdinGone(err error) bool {
 
 func (proc *turnProcess) reap() {
 	waitErr := proc.cmd.Wait()
-	killErr := killGroup(proc.cmd.Process)
-	closeQuietly(proc.stdin)
+	killErr := killLeftovers(proc.cmd.Process)
+	closeErr := proc.closeStdin()
 	<-proc.prompted
-	proc.waitErr = errors.Join(waitErr, killErr, proc.promptErr)
+	proc.waitErr = errors.Join(waitErr, killErr, closeErr, proc.promptErr)
 	close(proc.exited)
 }
 
@@ -100,10 +100,11 @@ func killAfterTreeFailure(process *os.Process, treeErr error) error {
 	return nil
 }
 
-func closeQuietly(file io.Closer) {
-	if err := file.Close(); err != nil {
-		return
+func (proc *turnProcess) closeStdin() error {
+	if err := proc.stdin.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+		return err
 	}
+	return nil
 }
 
 func (proc *turnProcess) closeStdout() error {
@@ -111,6 +112,18 @@ func (proc *turnProcess) closeStdout() error {
 		return err
 	}
 	return nil
+}
+
+func (proc *turnProcess) exitsWithin(grace time.Duration, stop context.CancelFunc) bool {
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	select {
+	case <-proc.exited:
+		return true
+	case <-timer.C:
+	}
+	stop()
+	return false
 }
 
 func (proc *turnProcess) wait() error {

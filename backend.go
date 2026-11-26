@@ -14,11 +14,15 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	contracts "github.com/Herrscherd/herrscher-contracts"
 )
 
-const defaultCmd = "agy"
+const (
+	defaultCmd      = "agy"
+	resultExitGrace = 10 * time.Second
+)
 
 // Config configures an Antigravity backend. An empty Cmd runs agy, an empty
 // Model keeps the default model of agy, and ResumeID names the conversation the
@@ -41,8 +45,6 @@ func NewBackend(_ context.Context, config Config) contracts.Backend {
 		effort:       config.Effort,
 		dir:          config.Dir,
 		stderr:       diagnosticsOutput(config),
-		drain:        drainPipe,
-		setDeadline:  setReadDeadline,
 		conversation: config.ResumeID,
 	}
 }
@@ -60,8 +62,6 @@ type responder struct {
 	effort       string
 	dir          string
 	stderr       io.Writer
-	drain        func(io.Reader) error
-	setDeadline  stdoutDeadline
 	turns        sync.Mutex
 	mu           sync.Mutex
 	conversation string
@@ -79,24 +79,32 @@ func (r *responder) Respond(ctx context.Context, prompt contracts.Prompt, onEven
 	resumed := r.ResumeToken()
 	runCtx, stop := context.WithCancel(ctx)
 	defer stop()
-	proc, err := startTurn(runCtx, turnArgv(r.base, r.model, r.effort, resumed), r.dir, input, r.stderr, r.setDeadline)
+	proc, err := startTurn(runCtx, turnArgv(r.base, r.model, r.effort, resumed), r.dir, input, r.stderr)
 	if err != nil {
 		return "", fmt.Errorf("agy start: %w", err)
 	}
 	turn, readErr := readOutput(proc, stop, func(out io.Reader) (turnResult, error) {
 		return readTurn(bufio.NewReader(out), resumed, onEvent)
 	})
-	drainErr := r.drainOutput(proc, stop)
-	waitErr := errors.Join(proc.wait(), proc.closeStdout())
+	isCutAfterResult := readErr == nil && !proc.exitsWithin(resultExitGrace, stop)
+	drainErr := drainOutput(proc, stop)
+	waitErr := errors.Join(exitError(proc.wait(), isCutAfterResult), proc.closeStdout())
 	r.setConversation(turn.Conversation)
 	return turn.Text, turnOutcome(turn, readErr, drainErr, waitErr)
 }
 
-func (r *responder) drainOutput(proc *turnProcess, stop context.CancelFunc) error {
+func drainOutput(proc *turnProcess, stop context.CancelFunc) error {
 	_, err := readOutput(proc, stop, func(pipe io.Reader) (struct{}, error) {
-		return struct{}{}, r.drain(pipe)
+		return struct{}{}, drainPipe(pipe)
 	})
 	return ignoreOwnCut(err)
+}
+
+func exitError(err error, isCutAfterResult bool) error {
+	if isCutAfterResult {
+		return nil
+	}
+	return err
 }
 
 func turnOutcome(turn turnResult, readErr, drainErr, waitErr error) error {
@@ -204,7 +212,9 @@ func turnInput(prompt contracts.Prompt) (string, error) {
 	return string(line) + "\n", nil
 }
 
-var memoryFence = regexp.MustCompile(`(?i)<\s*/?\s*memory\s*>`)
+const fenceSpace = `[\s\v\x{00a0}\x{200b}\x{feff}]`
+
+var memoryFence = regexp.MustCompile(`(?i)<` + fenceSpace + `*/?` + fenceSpace + `*memory\b[^>]*(?:>|\z)`)
 
 func withContext(recalled, text string) string {
 	if recalled == "" {

@@ -50,7 +50,11 @@ The prompt is written on stdin as one line, `{"event":"user","message":{"content
 and stdin is closed, so `agy` runs that single turn and exits. The prompt never
 appears in argv. It carries the recalled memory fenced into a
 `<memory data-only="true">` block, and the paths of any downloaded attachment as
-`[Attached file: path]` markers. A prompt with no text and no attachment fails
+`[Attached file: path]` markers. Inside the recalled memory, every opening or
+closing `memory` tag is replaced by `[memory]` before fencing, attributes,
+blank characters (non-breaking and zero width spaces included), letter case and
+an unterminated tag at the end included, so recalled text cannot close the fence.
+A prompt with no text and no attachment fails
 with `ErrEmptyPrompt` before any process starts.
 
 Every tool call is approved (`--dangerously-skip-permissions`): `agy` has no
@@ -75,12 +79,17 @@ call at once. A repeated finish closes nothing. A turn follows at most 256 open
 and 4096 distinct calls; the first start past a bound logs one `slog.Warn`.
 
 The `usage` of the final `result` of `agy` adds up the whole conversation, so it
-is ignored. The `result` event carries the output tokens summed over the steps
-of this turn, and the input and cache read tokens of its last step. `agy` gives
+is ignored. The `result` event carries the input, output and cache read tokens
+summed over the steps of this turn. `agy` gives
 no price: the catalogue leaves prices unknown and the cost is shown in tokens.
 
 A result whose status is not `SUCCESS` ends the turn with a `TurnFailedError`
 holding its error text, such as an unknown model or a sign in that is missing.
+
+Once the `result` is read, `agy` gets 10 seconds to exit. A process still alive
+after that (one was seen lingering a minute after a `503 No capacity` result) is
+killed with its group, and the kill is not reported as an error: the turn ends
+with the outcome of its `result`.
 
 ## Resume
 
@@ -113,7 +122,7 @@ models `agy` 1.5.18 listed.
 | What it finds | State | Detail | Remedy |
 |---|---|---|---|
 | a listing | `ok` | `health.connected` | |
-| a sign in that is missing | `off` | `health.not_logged_in` | run `agy` |
+| a sign in that is missing (`sign in`, `authentication required` or `authentication failed` in the output) | `off` | `health.not_logged_in` | run `agy` |
 | an empty listing | `degraded` | `health.unreachable` (`no model listed`) | |
 | the binary is not installed | `off` | `health.unreachable` (`command not found`) | |
 | a named profile is asked for | `off` | `health.unreachable` (`profiles not supported`) | |
@@ -128,4 +137,7 @@ failure is `down`, and an answered turn is `ok`.
 
 `scripts/check.sh` runs the chain of the house Go book: `go mod tidy -diff`,
 `golangci-lint fmt` and `run`, the comment check, the tests with `-race`, the
-build with `CGO_ENABLED=0` and `govulncheck`, each capped at 6 GB.
+build with `CGO_ENABLED=0` and `govulncheck`. Outside CI each step is capped at
+6 GB of memory; under CI (`CI` set) it runs without the cap. The Windows job runs
+the tests that need no shell script; the stub based tests live in `_unix_test.go`
+files.

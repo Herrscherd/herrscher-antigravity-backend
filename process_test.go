@@ -54,8 +54,9 @@ func TestReadOutputGraceWithoutReadDeadlineIsBounded(t *testing.T) {
 	}
 	finished := make(chan struct{})
 	t.Cleanup(func() {
-		closeQuietly(writer)
-		closeQuietly(reader)
+		if err := errors.Join(writer.Close(), reader.Close()); err != nil && !errors.Is(err, os.ErrClosed) {
+			t.Error(err)
+		}
 		select {
 		case <-finished:
 		case <-time.After(outputGuardLimit):

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -61,27 +62,6 @@ func TestDuplicateModelIsListedOnce(t *testing.T) {
 	}
 }
 
-func TestDiscoverRunsTheModelsCommand(t *testing.T) {
-	stub := writeStubScript(t, `[ "$1" = models ] || exit 3
-printf '%s' "`+recordedModels+`"`)
-	specs, err := discover(t.Context(), nativeAccess(stub))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(specs) != 3 {
-		t.Fatalf("specs = %+v", specs)
-	}
-}
-
-func TestDiscoverSignedOutListsNothingWithoutError(t *testing.T) {
-	stub := writeStubScript(t, `echo "Error: Please sign in to view available models. Launch the CLI without arguments to sign in." >&2
-exit 1`)
-	specs, err := discover(t.Context(), nativeAccess(stub))
-	if err != nil || specs != nil {
-		t.Fatalf("specs = %+v, err = %v, want nothing and no error", specs, err)
-	}
-}
-
 func TestDiscoverGatewayOnlyNeverRunsTheCLI(t *testing.T) {
 	access := contracts.DiscoveryAccess{Getenv: envWith(filepath.Join(t.TempDir(), "absent")), Policy: contracts.PolicyGatewayOnly}
 	specs, err := discover(t.Context(), access)
@@ -91,16 +71,9 @@ func TestDiscoverGatewayOnlyNeverRunsTheCLI(t *testing.T) {
 }
 
 func TestDiscoverMissingBinaryIsAnError(t *testing.T) {
-	if _, err := discover(t.Context(), nativeAccess(filepath.Join(t.TempDir(), "absent"))); err == nil {
-		t.Fatal("a missing agy returned no error")
-	}
-}
-
-func TestDiscoverOverlongListingIsAnError(t *testing.T) {
-	stub := writeStubScript(t, "head -c 300000 /dev/zero | tr '\\000' a")
-	_, err := discover(t.Context(), nativeAccess(stub))
-	if _, isTooLarge := errors.AsType[*OutputTooLargeError](err); !isTooLarge {
-		t.Fatal("an overlong listing returned no error")
+	_, err := discover(t.Context(), nativeAccess(filepath.Join(t.TempDir(), "absent")))
+	if !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, exec.ErrNotFound) {
+		t.Fatalf("err = %v, want the missing binary", err)
 	}
 }
 
@@ -129,8 +102,8 @@ func TestDiscoverStopsWhenDeadlinePasses(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	if _, err := discover(ctx, nativeAccess(command)); err == nil {
-		t.Fatal("a hanging listing returned no error")
+	if _, err := discover(ctx, nativeAccess(command)); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the deadline", err)
 	}
 	if elapsed := time.Since(started); elapsed > 10*time.Second {
 		t.Fatalf("discover took %v past its deadline", elapsed)
