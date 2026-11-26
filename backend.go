@@ -214,9 +214,12 @@ func turnInput(prompt contracts.Prompt) (string, error) {
 	return string(line) + "\n", nil
 }
 
-const fenceSpace = `[\s\v\x{00a0}\x{200b}\x{feff}]`
+const (
+	fenceSpace  = `[\s\v\p{Z}\p{Cf}\x{0085}]`
+	fenceFormat = `\p{Cf}*`
+)
 
-var memoryFence = regexp.MustCompile(`(?i)<` + fenceSpace + `*/?` + fenceSpace + `*memory\b[^>]*(?:>|\z)`)
+var memoryFence = regexp.MustCompile(`(?i)<` + fenceSpace + `*/?` + fenceSpace + `*m` + fenceFormat + `e` + fenceFormat + `m` + fenceFormat + `o` + fenceFormat + `r` + fenceFormat + `y\b[^>]*(?:>|\z)`)
 
 func withContext(recalled, text string) string {
 	if recalled == "" {
