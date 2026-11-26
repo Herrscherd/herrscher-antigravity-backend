@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -47,7 +48,7 @@ func TestCheckOfAMissingDirectoryIsNoInput(t *testing.T) {
 	if got := check([]string{missing}, &stdout, &stderr); got != exitNoInput {
 		t.Fatalf("check() = %d, want %d", got, exitNoInput)
 	}
-	if want := `commentcheck: cannot read "` + missing + `"`; !strings.HasPrefix(stderr.String(), want) {
+	if want := "commentcheck: cannot read " + strconv.Quote(missing); !strings.HasPrefix(stderr.String(), want) {
 		t.Fatalf("stderr = %q, want prefix %q", stderr.String(), want)
 	}
 }
@@ -71,7 +72,7 @@ func TestCheckListsEachStrayOnStdoutAndExitsOne(t *testing.T) {
 	if got := check([]string{directory}, &stdout, &stderr); got != exitStray {
 		t.Fatalf("check() = %d, want %d", got, exitStray)
 	}
-	want := `"` + filepath.Join(directory, "stray.go") + `":3:1: ` + refusedReason + "\n"
+	want := strconv.Quote(filepath.Join(directory, "stray.go")) + ":3:1: " + refusedReason + "\n"
 	if stdout.String() != want {
 		t.Fatalf("stdout = %q, want %q", stdout.String(), want)
 	}
@@ -92,7 +93,7 @@ func TestASymbolicLinkIsListedAndItsTargetIsNeverRead(t *testing.T) {
 	if got := check([]string{directory}, &stdout, &stderr); got != exitStray {
 		t.Fatalf("check() = %d, want %d", got, exitStray)
 	}
-	if want := `"` + link + `": ` + unreadableReason + "\n"; stdout.String() != want {
+	if want := strconv.Quote(link) + ": " + unreadableReason + "\n"; stdout.String() != want {
 		t.Fatalf("stdout = %q, want %q", stdout.String(), want)
 	}
 	if strings.Contains(stdout.String()+stderr.String(), "SECRETTOKEN") {
@@ -107,7 +108,7 @@ func TestAFileThatDoesNotParseIsNoInputAndItsTextIsNotEchoed(t *testing.T) {
 	if got := check([]string{directory}, &stdout, &stderr); got != exitNoInput {
 		t.Fatalf("check() = %d, want %d", got, exitNoInput)
 	}
-	if want := `commentcheck: cannot parse "` + filepath.Join(directory, "bad.go") + `":`; !strings.HasPrefix(stderr.String(), want) {
+	if want := "commentcheck: cannot parse " + strconv.Quote(filepath.Join(directory, "bad.go")) + ":"; !strings.HasPrefix(stderr.String(), want) {
 		t.Fatalf("stderr = %q, want prefix %q", stderr.String(), want)
 	}
 	if strings.Contains(stderr.String(), "SECRETTOKEN") || stdout.Len() != 0 {
